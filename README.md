@@ -1,3 +1,4 @@
 # Computacao-Grafica
 
-cd /home/barkos/Computacao-Grafica && python3 -m http.server 8000
+Disciplina de Computação gráfica da UNIFESP 2026
+- Docente: Ana Luisa Dine Martins Lemos
