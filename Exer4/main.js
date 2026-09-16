@@ -307,7 +307,7 @@ function robotEyeVertices() {
 // membros
 // ==================================================
 
-function robotLimbVertices() {
+function robotMembroVertices() {
     return new Float32Array(rectangleVertices(-0.05, -0.35, 0.1, 0.35));
 }
 
@@ -350,11 +350,11 @@ class Robot {
         this.rightEyes = new SceneObject(robotEyeVertices(), color3);
         this.head = new SceneObject(robotHeadVertices(), color2);
         
-        this.leftArm = new SceneObject(robotLimbVertices(), color2);
-        this.rightArm = new SceneObject(robotLimbVertices(), color2);
+        this.leftArm = new SceneObject(robotMembroVertices(), color2);
+        this.rightArm = new SceneObject(robotMembroVertices(), color2);
         
-        this.leftLeg = new SceneObject(robotLimbVertices(), color2);
-        this.rightLeg = new SceneObject(robotLimbVertices(), color2);
+        this.leftLeg = new SceneObject(robotMembroVertices(), color2);
+        this.rightLeg = new SceneObject(robotMembroVertices(), color2);
     }
 
     move() {
@@ -366,8 +366,8 @@ class Robot {
 
         this.animationTime += 0.1;
  
-        const ang = Math.sin(this.animationTime) * 0.5;
-
+        const angArm = Math.sin(this.animationTime) * 0.2;
+        const angLeg = Math.sin(this.animationTime) * 0.8;
 
         const robotTransform = m3.translation(this.tx, this.ty);
         this.body.updateModelTransform(robotTransform);
@@ -383,25 +383,25 @@ class Robot {
         
         const leftArm = m3.multiply(
             m3.translation(-0.15, 0.15), 
-            m3.rotation(ang)      
+            m3.rotation(angArm)      
         );
         this.leftArm.updateModelTransform(m3.multiply(robotTransform, leftArm));
 
         const rightArm = m3.multiply(
             m3.translation(0.15, 0.15), 
-            m3.rotation(-ang)
+            m3.rotation(-angArm)
         );
         this.rightArm.updateModelTransform(m3.multiply(robotTransform, rightArm));
 
         const leftLeg = m3.multiply(
             m3.translation(-0.08, -0.2), 
-            m3.rotation(-ang)
+            m3.rotation(-angLeg)
         );
         this.leftLeg.updateModelTransform(m3.multiply(robotTransform, leftLeg));
 
         const rightLeg = m3.multiply(
             m3.translation(0.08, -0.2), 
-            m3.rotation(ang)
+            m3.rotation(angLeg)
         );
         this.rightLeg.updateModelTransform(m3.multiply(robotTransform, rightLeg));
     }
