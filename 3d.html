@@ -2,30 +2,48 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Visualização 3D - Viewing Pipeline</title>
+  <title>Viewing 3D - View Plane orientado por N e V</title>
   <style>
-    body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: sans-serif; }
-    #legenda {
-      position: absolute; top: 15px; left: 15px;
-      background: rgba(255, 255, 255, 0.9); padding: 12px 16px;
-      border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    body { margin: 0; overflow: hidden; background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+    #painel {
+      position: absolute; top: 15px; left: 15px; width: 320px;
+      background: rgba(255, 255, 255, 0.95); padding: 15px;
+      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-size: 13px; line-height: 1.4;
     }
-    .item { margin: 4px 0; display: flex; align-items: center; }
-    .cor { width: 12px; height: 12px; display: inline-block; margin-right: 8px; border-radius: 2px; }
+    h3 { margin: 0 0 10px 0; font-size: 15px; color: #1b4f72; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+    .legenda-item { display: flex; align-items: center; margin-bottom: 5px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+    .controle { margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; }
+    label { display: block; font-weight: bold; margin-bottom: 3px; color: #333; }
+    input[type="range"] { width: 100%; }
+    .valores { font-family: monospace; background: #eef2f5; padding: 6px; border-radius: 4px; margin-top: 8px; font-size: 11px; }
   </style>
 </head>
 <body>
-  <div id="legenda">
-    <strong>Sistema de Visão 3D</strong>
-    <div class="item"><span class="cor" style="background:#1b4f72;"></span> Objeto (Pirâmide) &amp; Alvo (P_ref)</div>
-    <div class="item"><span class="cor" style="background:#85c1e9;"></span> Plano de Visão (View Plane)</div>
-    <div class="item"><span class="cor" style="background:#000000;"></span> Vetor Normal N (aponta para P_0)</div>
-    <div class="item"><span class="cor" style="background:#c0392b;"></span> Câmera (P_0) e Eixos (x_view, y_view, z_view)</div>
-    <small style="color:#555; display:block; margin-top:6px;">Arraste para girar | Scroll para zoom</small>
+  <div id="painel">
+    <h3>Orientação do View Plane (N e V)</h3>
+    <div class="legenda-item"><span class="dot" style="background:#e74c3c;"></span> <strong>Faixa Vermelha:</strong> Topo do View Plane (+y_view)</div>
+    <div class="legenda-item"><span class="dot" style="background:#000000;"></span> <strong>N (n):</strong> Direção normal ao plano (+z_view)</div>
+    <div class="legenda-item"><span class="dot" style="background:#e67e22;"></span> <strong>V (Input):</strong> Vetor View-Up escolhido</div>
+    <div class="legenda-item"><span class="dot" style="background:#27ae60;"></span> <strong>v:</strong> Eixo y_view ajustado (90° com N)</div>
+    <div class="legenda-item"><span class="dot" style="background:#2980b9;"></span> <strong>u:</strong> Eixo x_view (V × n)</div>
+
+    <div class="controle">
+      <label>1. Direção de N (Altura da Câmera P₀): <span id="val-n">1.8</span></label>
+      <input type="range" id="slider-n" min="-1.0" max="4.0" step="0.1" value="1.8">
+
+      <label style="margin-top:8px;">2. Giro do View-Up (V) — "Volante": <span id="val-v">0°</span></label>
+      <input type="range" id="slider-v" min="-180" max="180" value="0">
+      
+      <label style="margin-top:8px;">3. Distância do View Plane (z_vp):</label>
+      <input type="range" id="slider-vp" min="0.2" max="0.8" step="0.05" value="0.45">
+    </div>
+
+    <div class="valores" id="vetores-txt"></div>
+    <small style="color:#666; display:block; margin-top:8px;">🖱️ Botão esquerdo: girar | Scroll: zoom</small>
   </div>
 
-  <!-- Importando Three.js e OrbitControls via CDN -->
   <script type="importmap">
     {
       "imports": {
@@ -39,12 +57,11 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // 1. Cena, Câmera do Observador e Renderizador
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf8f9fa);
+    scene.background = new THREE.Color(0xf4f6f9);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(5, 4, 8);
+    camera.position.set(5.5, 4.5, 8.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -53,89 +70,184 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // Iluminação
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
 
-    // 2. Sistema de Coordenadas do Mundo (xw, yw, zw)[cite: 16]
-    const worldOrigin = new THREE.Vector3(-2.5, -1, 0);
-    const axisLength = 2.5;
-    const blackMat = new THREE.LineBasicMaterial({ color: 0x222222 });
+    const grid = new THREE.GridHelper(10, 10, 0xcccccc, 0xe5e5e5);
+    grid.position.y = -1.2;
+    scene.add(grid);
 
-    function criarEixoMundo(dir, label) {
-      const pts = [worldOrigin, worldOrigin.clone().add(dir.clone().multiplyScalar(axisLength))];
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      scene.add(new THREE.Line(geom, blackMat));
+    function criarLabel(texto, corTexto = '#000000', bg = 'rgba(255,255,255,0.85)') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 64;
+      ctx.fillStyle = bg;
+      ctx.roundRect(10, 10, 236, 44, 10);
+      ctx.fill();
+      ctx.strokeStyle = corTexto;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillStyle = corTexto;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(texto, 128, 33);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
+      sprite.scale.set(1.5, 0.38, 1);
+      return sprite;
     }
-    criarEixoMundo(new THREE.Vector3(1, 0, 0), 'xw');
-    criarEixoMundo(new THREE.Vector3(0, 1, 0), 'yw');
-    criarEixoMundo(new THREE.Vector3(0, 0, 1), 'zw');
 
-    // 3. Pirâmide no Sistema do Mundo e Ponto de Referência (P_ref)[cite: 16]
-    const pyramidGeom = new THREE.ConeGeometry(1.1, 2.2, 4);
-    const pyramidMat = new THREE.MeshStandardMaterial({ color: 0x1b4f72, flatShading: true });
-    const pyramid = new THREE.Mesh(pyramidGeom, pyramidMat);
-    pyramid.position.set(-1.3, 0.1, 0.5);
-    pyramid.rotation.y = Math.PI / 6;
+    // Eixos do Mundo
+    const worldOrigin = new THREE.Vector3(-3, -1.2, 0);
+    [
+      { dir: new THREE.Vector3(1, 0, 0), nome: 'xw' },
+      { dir: new THREE.Vector3(0, 1, 0), nome: 'yw' },
+      { dir: new THREE.Vector3(0, 0, 1), nome: 'zw' }
+    ].forEach(e => {
+      const fim = worldOrigin.clone().add(e.dir.multiplyScalar(2));
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([worldOrigin, fim]), new THREE.LineBasicMaterial({ color: 0x555555 })));
+      const lbl = criarLabel(e.nome, '#444444');
+      lbl.position.copy(fim).add(new THREE.Vector3(0, 0.2, 0));
+      scene.add(lbl);
+    });
+
+    // Pirâmide e Ponto Alvo P_ref
+    const pyramid = new THREE.Mesh(
+      new THREE.ConeGeometry(1.1, 2.2, 4),
+      new THREE.MeshStandardMaterial({ color: 0x1b4f72, flatShading: true })
+    );
+    pyramid.position.set(-1.5, -0.1, 0.4);
+    pyramid.rotation.y = Math.PI / 5;
     scene.add(pyramid);
 
-    // Ponto P_ref na face da pirâmide[cite: 16]
-    const P_ref = new THREE.Vector3(-0.9, 0.2, 0.7);
-    const dotGeom = new THREE.SphereGeometry(0.09, 16, 16);
-    const redMat = new THREE.MeshBasicMaterial({ color: 0xb03a2e });
-    const pRefMesh = new THREE.Mesh(dotGeom, redMat);
-    pRefMesh.position.copy(P_ref);
-    scene.add(pRefMesh);
+    const P_ref = new THREE.Vector3(-1.0, 0.1, 0.6);
+    const esferaRef = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({ color: 0xb03a2e }));
+    esferaRef.position.copy(P_ref);
+    scene.add(esferaRef);
 
-    // 4. Posição da Câmera Virtual (P0) e Vetor Normal (N)[cite: 16]
+    const lblPref = criarLabel('P_ref', '#b03a2e');
+    lblPref.position.copy(P_ref).add(new THREE.Vector3(0, -0.4, 0.3));
+    scene.add(lblPref);
+
+    // Câmera P0
     const P0 = new THREE.Vector3(3.2, 1.8, -1.2);
-    const p0Mesh = new THREE.Mesh(dotGeom, redMat);
-    p0Mesh.position.copy(P0);
-    scene.add(p0Mesh);
+    const esferaP0 = new THREE.Mesh(new THREE.SphereGeometry(0.11), new THREE.MeshBasicMaterial({ color: 0xb03a2e }));
+    scene.add(esferaP0);
+    const lblP0 = criarLabel('P₀ (Câmera)', '#b03a2e');
+    scene.add(lblP0);
 
-    // Vetor N = P0 - P_ref (aponta do alvo para a câmera)[cite: 16]
-    const N_vec = new THREE.Vector3().subVectors(P0, P_ref);
-    const n_unit = N_vec.clone().normalize();
+    const grupoVisao = new THREE.Group();
+    scene.add(grupoVisao);
 
-    // 5. Plano de Visão (View Plane) perpendicular a N
-    const viewPlanePos = P_ref.clone().lerp(P0, 0.45); // Posicionado entre P_ref e P0
-    const planeGeom = new THREE.PlaneGeometry(2.4, 2.4);
-    const planeMat = new THREE.MeshBasicMaterial({
-      color: 0x85c1e9,
-      transparent: true,
-      opacity: 0.55,
-      side: THREE.DoubleSide
-    });
-    const viewPlane = new THREE.Mesh(planeGeom, planeMat);
-    viewPlane.position.copy(viewPlanePos);
-    // Alinha a normal do plano (+Z local) com o vetor n_unit
-    viewPlane.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n_unit);
-    scene.add(viewPlane);
+    // View Plane com faixa vermelha no topo (+Y local do plano) para visualizar a rotação de V
+    const viewPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6, 2.0),
+      new THREE.MeshBasicMaterial({ color: 0x85c1e9, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+    );
+    const bordaPlano = new THREE.LineSegments(
+      new THREE.EdgesGeometry(viewPlane.geometry),
+      new THREE.LineBasicMaterial({ color: 0x2980b9 })
+    );
+    const faixaTopo = new THREE.Mesh(
+      new THREE.BoxGeometry(2.6, 0.12, 0.03),
+      new THREE.MeshBasicMaterial({ color: 0xe74c3c })
+    );
+    faixaTopo.position.set(0, 1.0, 0); // Fica sempre no topo (+v) do View Plane
+    viewPlane.add(bordaPlano, faixaTopo);
+    grupoVisao.add(viewPlane);
 
-    // Seta do Vetor Normal N saindo do View Plane até P0
-    const distPlaneToP0 = viewPlanePos.distanceTo(P0);
-    const arrowN = new THREE.ArrowHelper(n_unit, viewPlanePos, distPlaneToP0 - 0.08, 0x000000, 0.25, 0.15);
-    scene.add(arrowN);
+    const lblVP = criarLabel('View Plane', '#1b4f72');
+    const lblN = criarLabel('N (Normal)', '#000000');
+    const lblV_in = criarLabel('V (Input)', '#e67e22');
+    const lbl_v = criarLabel('v (y_view)', '#27ae60');
+    const lbl_u = criarLabel('u (x_view)', '#2980b9');
+    const lbl_n = criarLabel('n (z_view)', '#000000');
+    grupoVisao.add(lblVP, lblN, lblV_in, lbl_v, lbl_u, lbl_n);
 
-    // 6. Sistema de Coordenadas da Câmera (u, v, n) em P0
-    const V_up = new THREE.Vector3(0, 1, 0);
-    const u_unit = new THREE.Vector3().crossVectors(V_up, n_unit).normalize(); // x_view[cite: 20]
-    const v_unit = new THREE.Vector3().crossVectors(n_unit, u_unit).normalize(); // y_view[cite: 20]
+    let setas = [];
 
-    function desenharEixoCamera(direcao, cor) {
-      const fim = P0.clone().add(direcao.clone().multiplyScalar(1.6));
-      const geom = new THREE.BufferGeometry().setFromPoints([P0, fim]);
-      const mat = new THREE.LineBasicMaterial({ color: cor });
-      scene.add(new THREE.Line(geom, mat));
+    function atualizarCena() {
+      setas.forEach(s => grupoVisao.remove(s));
+      setas = [];
+
+      const alturaP0 = parseFloat(document.getElementById('slider-n').value);
+      const giroGraus = parseFloat(document.getElementById('slider-v').value);
+      const fatorVP = parseFloat(document.getElementById('slider-vp').value);
+
+      document.getElementById('val-n').innerText = alturaP0.toFixed(1);
+      document.getElementById('val-v').innerText = giroGraus + '°';
+
+      // Atualiza posição de P0 (o que muda a direção de N = P0 - P_ref)
+      P0.y = alturaP0;
+      esferaP0.position.copy(P0);
+      lblP0.position.copy(P0).add(new THREE.Vector3(0.4, -0.35, 0));
+
+      // 1. Vetor Normal n (+z_view)
+      const N = new THREE.Vector3().subVectors(P0, P_ref);
+      const n = N.clone().normalize();
+
+      // 2. Vetor View-Up V girado em torno do eixo n
+      const baseUp = new THREE.Vector3(0, 1, 0);
+      const V_input = baseUp.clone().applyAxisAngle(n, THREE.MathUtils.degToRad(giroGraus));
+
+      // 3. Base ortonormal u, v, n (Slide 19)
+      const u = new THREE.Vector3().crossVectors(V_input, n).normalize();
+      const v = new THREE.Vector3().crossVectors(n, u).normalize();
+
+      // 4. Orienta o View Plane usando a base completa (u = X, v = Y, n = Z)
+      const posVP = P_ref.clone().lerp(P0, fatorVP);
+      viewPlane.position.copy(posVP);
+      const matrizRotacao = new THREE.Matrix4().makeBasis(u, v, n);
+      viewPlane.quaternion.setFromRotationMatrix(matrizRotacao);
+
+      lblVP.position.copy(posVP).add(v.clone().multiplyScalar(-1.35));
+
+      // Linha tracejada da direção de visão
+      const lineVisao = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([P_ref, posVP]),
+        new THREE.LineDashedMaterial({ color: 0x333333, dashSize: 0.15, gapSize: 0.1 })
+      );
+      lineVisao.computeLineDistances();
+      grupoVisao.add(lineVisao);
+      setas.push(lineVisao);
+
+      // Seta N (do plano até P0)
+      const dist = posVP.distanceTo(P0);
+      const arrowN = new THREE.ArrowHelper(n, posVP, Math.max(0.2, dist - 0.12), 0x000000, 0.25, 0.14);
+      lblN.position.copy(posVP).lerp(P0, 0.5).add(new THREE.Vector3(0, 0.3, 0));
+
+      // Setas dos eixos em P0
+      const tam = 1.6;
+      const arrowV_in = new THREE.ArrowHelper(V_input, P0, tam * 1.15, 0xe67e22, 0.22, 0.12);
+      const arrow_v = new THREE.ArrowHelper(v, P0, tam, 0x27ae60, 0.22, 0.12);
+      const arrow_u = new THREE.ArrowHelper(u, P0, tam, 0x2980b9, 0.22, 0.12);
+      const arrow_n = new THREE.ArrowHelper(n, P0, tam, 0x000000, 0.22, 0.12);
+
+      lblV_in.position.copy(P0).add(V_input.clone().multiplyScalar(tam * 1.15 + 0.25));
+      lbl_v.position.copy(P0).add(v.clone().multiplyScalar(tam + 0.25));
+      lbl_u.position.copy(P0).add(u.clone().multiplyScalar(tam + 0.25));
+      lbl_n.position.copy(P0).add(n.clone().multiplyScalar(tam + 0.25));
+
+      grupoVisao.add(arrowN, arrowV_in, arrow_v, arrow_u, arrow_n);
+      setas.push(arrowN, arrowV_in, arrow_v, arrow_u, arrow_n);
+
+      document.getElementById('vetores-txt').innerHTML = `
+        <strong>n (z_view):</strong> (${n.x.toFixed(2)}, ${n.y.toFixed(2)}, ${n.z.toFixed(2)})<br>
+        <strong>u (x_view):</strong> (${u.x.toFixed(2)}, ${u.y.toFixed(2)}, ${u.z.toFixed(2)})<br>
+        <strong>v (y_view):</strong> (${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})
+      `;
     }
 
-    desenharEixoCamera(u_unit, 0xc0392b); // x_view
-    desenharEixoCamera(v_unit, 0xc0392b); // y_view
-    desenharEixoCamera(n_unit, 0x222222); // z_view (continuação de N)
+    document.getElementById('slider-n').addEventListener('input', atualizarCena);
+    document.getElementById('slider-v').addEventListener('input', atualizarCena);
+    document.getElementById('slider-vp').addEventListener('input', atualizarCena);
+    atualizarCena();
 
-    // Responsividade e Loop de Renderização
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
