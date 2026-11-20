@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Visualização 3D - Viewing Pipeline</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #ffffff; font-family: sans-serif; }
+    #legenda {
+      position: absolute; top: 15px; left: 15px;
+      background: rgba(255, 255, 255, 0.9); padding: 12px 16px;
+      border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .item { margin: 4px 0; display: flex; align-items: center; }
+    .cor { width: 12px; height: 12px; display: inline-block; margin-right: 8px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="legenda">
+    <strong>Sistema de Visão 3D</strong>
+    <div class="item"><span class="cor" style="background:#1b4f72;"></span> Objeto (Pirâmide) &amp; Alvo (P_ref)</div>
+    <div class="item"><span class="cor" style="background:#85c1e9;"></span> Plano de Visão (View Plane)</div>
+    <div class="item"><span class="cor" style="background:#000000;"></span> Vetor Normal N (aponta para P_0)</div>
+    <div class="item"><span class="cor" style="background:#c0392b;"></span> Câmera (P_0) e Eixos (x_view, y_view, z_view)</div>
+    <small style="color:#555; display:block; margin-top:6px;">Arraste para girar | Scroll para zoom</small>
+  </div>
+
+  <!-- Importando Three.js e OrbitControls via CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // 1. Cena, Câmera do Observador e Renderizador
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8f9fa);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(5, 4, 8);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Iluminação
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // 2. Sistema de Coordenadas do Mundo (xw, yw, zw)[cite: 16]
+    const worldOrigin = new THREE.Vector3(-2.5, -1, 0);
+    const axisLength = 2.5;
+    const blackMat = new THREE.LineBasicMaterial({ color: 0x222222 });
+
+    function criarEixoMundo(dir, label) {
+      const pts = [worldOrigin, worldOrigin.clone().add(dir.clone().multiplyScalar(axisLength))];
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      scene.add(new THREE.Line(geom, blackMat));
+    }
+    criarEixoMundo(new THREE.Vector3(1, 0, 0), 'xw');
+    criarEixoMundo(new THREE.Vector3(0, 1, 0), 'yw');
+    criarEixoMundo(new THREE.Vector3(0, 0, 1), 'zw');
+
+    // 3. Pirâmide no Sistema do Mundo e Ponto de Referência (P_ref)[cite: 16]
+    const pyramidGeom = new THREE.ConeGeometry(1.1, 2.2, 4);
+    const pyramidMat = new THREE.MeshStandardMaterial({ color: 0x1b4f72, flatShading: true });
+    const pyramid = new THREE.Mesh(pyramidGeom, pyramidMat);
+    pyramid.position.set(-1.3, 0.1, 0.5);
+    pyramid.rotation.y = Math.PI / 6;
+    scene.add(pyramid);
+
+    // Ponto P_ref na face da pirâmide[cite: 16]
+    const P_ref = new THREE.Vector3(-0.9, 0.2, 0.7);
+    const dotGeom = new THREE.SphereGeometry(0.09, 16, 16);
+    const redMat = new THREE.MeshBasicMaterial({ color: 0xb03a2e });
+    const pRefMesh = new THREE.Mesh(dotGeom, redMat);
+    pRefMesh.position.copy(P_ref);
+    scene.add(pRefMesh);
+
+    // 4. Posição da Câmera Virtual (P0) e Vetor Normal (N)[cite: 16]
+    const P0 = new THREE.Vector3(3.2, 1.8, -1.2);
+    const p0Mesh = new THREE.Mesh(dotGeom, redMat);
+    p0Mesh.position.copy(P0);
+    scene.add(p0Mesh);
+
+    // Vetor N = P0 - P_ref (aponta do alvo para a câmera)[cite: 16]
+    const N_vec = new THREE.Vector3().subVectors(P0, P_ref);
+    const n_unit = N_vec.clone().normalize();
+
+    // 5. Plano de Visão (View Plane) perpendicular a N
+    const viewPlanePos = P_ref.clone().lerp(P0, 0.45); // Posicionado entre P_ref e P0
+    const planeGeom = new THREE.PlaneGeometry(2.4, 2.4);
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: 0x85c1e9,
+      transparent: true,
+      opacity: 0.55,
+      side: THREE.DoubleSide
+    });
+    const viewPlane = new THREE.Mesh(planeGeom, planeMat);
+    viewPlane.position.copy(viewPlanePos);
+    // Alinha a normal do plano (+Z local) com o vetor n_unit
+    viewPlane.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n_unit);
+    scene.add(viewPlane);
+
+    // Seta do Vetor Normal N saindo do View Plane até P0
+    const distPlaneToP0 = viewPlanePos.distanceTo(P0);
+    const arrowN = new THREE.ArrowHelper(n_unit, viewPlanePos, distPlaneToP0 - 0.08, 0x000000, 0.25, 0.15);
+    scene.add(arrowN);
+
+    // 6. Sistema de Coordenadas da Câmera (u, v, n) em P0
+    const V_up = new THREE.Vector3(0, 1, 0);
+    const u_unit = new THREE.Vector3().crossVectors(V_up, n_unit).normalize(); // x_view[cite: 20]
+    const v_unit = new THREE.Vector3().crossVectors(n_unit, u_unit).normalize(); // y_view[cite: 20]
+
+    function desenharEixoCamera(direcao, cor) {
+      const fim = P0.clone().add(direcao.clone().multiplyScalar(1.6));
+      const geom = new THREE.BufferGeometry().setFromPoints([P0, fim]);
+      const mat = new THREE.LineBasicMaterial({ color: cor });
+      scene.add(new THREE.Line(geom, mat));
+    }
+
+    desenharEixoCamera(u_unit, 0xc0392b); // x_view
+    desenharEixoCamera(v_unit, 0xc0392b); // y_view
+    desenharEixoCamera(n_unit, 0x222222); // z_view (continuação de N)
+
+    // Responsividade e Loop de Renderização
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
